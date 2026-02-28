@@ -21,8 +21,4 @@ authController.login);
 router.get("/verify-email",authController.verifyEmail);
 router.post("/resend-verification", authController.resendVerificationEmail);
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 86cd78050d43f2ebfb44223f27480d0ea876df2c
 module.exports = router;
