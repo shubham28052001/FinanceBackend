@@ -1,6 +1,7 @@
 const Usermodel = require("../models/user")
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
+const sendEmail = require("../nodemailer/sendMail")
+
 exports.register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -12,14 +13,21 @@ exports.register = async (req, res) => {
         }
         const existingUser = await Usermodel.findOne({ email });
         if (existingUser) {
-            return res.status(400).json({ message: "USER Already Exist" });
+            return res.status(400).json({
+                status: false,
+                message: "USER Already Exist"
+            });
         }
         const hashedPassword = await Usermodel.hashPassword(password)
-
+        const verificationToken = crypto.randomBytes(32).toString("hex");
+        const hashedToken = crypto.createHash("sha256").update(verificationToken).digest("hex");
         const user = await Usermodel.create({
             name,
             email,
-            password: hashedPassword
+            password: hashedPassword,
+            role: "user",
+            emailVerificationToken: hashedToken,
+            emailVerificationExpire: Date.now() + 5 * 60 * 1000
         });
 
         const accessToken = user.generateAccessToken();
@@ -27,11 +35,20 @@ exports.register = async (req, res) => {
         user.refreshToken = refreshToken;
         await user.save();
 
+        const verifyLink = `${process.env.CLIENT_URL}/api/users/verify-email?token=${verificationToken}`;
+
+        await sendEmail(
+            email,
+            "verify your Email",
+            `<h2>Verify Your Email</h2>
+             <p>Click below to verify</p>
+             <a href="${verifyLink}">Verify Email</a>`
+        );
+
         res.status(201).json({
             success: true,
-            message: "User registered successfully",
-            accessToken,
-            refreshToken
+            message: "Verification email sent",
+            accessToken
         });
 
     } catch (error) {
@@ -40,78 +57,141 @@ exports.register = async (req, res) => {
     }
 }
 
-exports.login = async (req,res) =>{
-    try{
-        const{email,password} = req.body;
-        if(!email || !password){
-        return res.staus(400).json({
-            success:false,
-            message:"Email and password is required"
+exports.login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and password is required"
+            })
+        }
+        const user = await Usermodel.findOne({ email }).select("+password");
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid email or password"
+            })
+        }
+        if (!user.isEmailVerified) {
+            return res.status(403).json({
+                success: false,
+                message: "Please verify your email before login"
+            });
+        }
+        const isMatch = await user.matchPassword(password);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: "invalid email or password"
+            })
+        }
+        const accessToken = user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+        await user.save();
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict"
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Login Successfully",
+            role: user.role,
+            accessToken,
         })
-    }
-    const user = await Usermodel.findOne({ email }).select("+password");
 
-    if(!user){
-        return res.status(401).json({
-            success:false,
-            message:"Invalid email or password"
-        })
-    }
-      // ✅ Email verification check
-    // if (!user.isEmailVerified) {
-    //   return res.status(403).json({
-    //     success: false,
-    //     message: "Please verify your email before login"
-    //   });
-    // }
-    const isMatch = await user.matchPassword(password);
-    if(!isMatch){
-        return res.status(401).json({
-            success:false,
-            message:"invalid email or password"
-        })
-    }
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
-
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    res.status(200).json({
-        success:true,
-        message:"Login Successfully",
-        role: user.role,
-        accessToken,
-        refreshToken
-    })
-
-    }catch(error){
+    } catch (error) {
         console.log(error);
-        res.status(500).json({message:error.message});
+        res.status(500).json({ message: error.message });
     }
 
-// }
-// exports.verifyEmail = async (req, res) => {
-//   const { token } = req.query;
+}
 
-//   const decoded = jwt.verify(token, process.env.JWT_ACCESS_KEY);
+exports.verifyEmail = async (req, res) => {
+    try {
+        const { token } = req.query;
+        if (!token) {
+            return res.status(400).json({ message: "Token missing" });
+        }
 
-//   const user = await Usermodel.findById(decoded.id);
+        const hashedToken = crypto
+            .createHash("sha256")
+            .update(token)
+            .digest("hex");
 
-//   user.isEmailVerified = true;
-//   await user.save();
+        const user = await Usermodel.findOne({
+            emailVerificationToken: hashedToken,
+            emailVerificationExpire: { $gt: Date.now() }
+        });
 
-//   res.json({ message: "Email verified successfully" });
-// };
+        if (!user) {
+            return res.status(400).json({
+                message: "Invalid or expired token"
+            });
+        }
 
+        user.isEmailVerified = true;
+        user.emailVerificationToken = undefined;
+        user.emailVerificationExpire = undefined;
+        await user.save();
 
-// exports.resendVerificationEmail = async (req, res) => {
-//   try {
-//     res.status(200).json({
-//       success: true,
-//       message: "Resend verification route working"
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
+        res.json({ success: true, message: "Email verified successfully" });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: error.message });
+    }
 };
+
+
+exports.resendVerificationEmail = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await Usermodel.findOne({ email });
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+        if (user.isEmailVerified) {
+            return res.status(400).json({
+                message: "Email already verified"
+            });
+        }
+        const verificationToken = crypto.randomBytes(32).toString("hex");
+        const hashedToken = crypto
+            .createHash("sha256")
+            .update(verificationToken)
+            .digest("hex");
+
+        user.emailVerificationToken = hashedToken;
+        user.emailVerificationExpire = Date.now() + 5 * 60 * 1000;
+
+
+        await user.save();
+
+        const verifyLink = `${process.env.CLIENT_URL}/api/users/verify-email?token=${verificationToken}`;
+
+        await sendEmail(
+            email,
+            "Resend Email Verification",
+            `<h2>Verify Your Email</h2>
+           <p>Click below to verify</p>
+           <a href="${verifyLink}">Verify Email</a>`
+        );
+
+        res.json({
+            success: true,
+            message: "Verification email resent"
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            message: error.message
+        });
+    }
+}
