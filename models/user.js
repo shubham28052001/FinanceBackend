@@ -27,23 +27,12 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
-    // emailVerificationToken: {
-    //   type: String,
-    //   select: false
-    // },
-
-    // emailVerificationExpire: {
-    //   type: Date,
-    //   select: false
-    // },
+   
     refreshToken: {
       type: String,
       select: false
     },
-    // isEmailVerified: {   
-    //   type: Boolean,
-    //   default: false
-    // }
+  
   },
   { timestamps: true }
 );

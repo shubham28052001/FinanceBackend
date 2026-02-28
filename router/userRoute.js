@@ -20,13 +20,4 @@ router.post("/login",[
 
 ],authController.login);
 
-// emailverification
-// router.get("/verifyemail",authController.verifyEmail);
-// //resend verification
-// router.post(
-//   "/resendverification",
-//   [body("email").isEmail().withMessage("Invalid Email")],
-//   authController.resendVerificationEmail
-// );
-
 module.exports = router;
