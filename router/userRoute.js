@@ -3,7 +3,6 @@ const router = express.Router();
 const authController = require("../controller/userController");
 const { body } = require("express-validator")
 
-// register api
 router.post("/register",
     [
         body("name").isLength({ min: 3 }).withMessage("Name too short"),
@@ -12,12 +11,18 @@ router.post("/register",
     ],
     authController.register);
 
-// login api
 
 router.post("/login",[
     body("email").isEmail().withMessage("Invalid Email"),
     body("password").notEmpty().withMessage("Password is required")
+],
+authController.login);
 
-],authController.login);
+router.get("/verify-email",authController.verifyEmail);
+router.post("/resend-verification", authController.resendVerificationEmail);
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 86cd78050d43f2ebfb44223f27480d0ea876df2c
 module.exports = router;
