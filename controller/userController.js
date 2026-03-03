@@ -92,6 +92,19 @@ exports.login = async (req, res) => {
         message: "Please verify your email before login",
       });
     }
+    if (user.isBlocked) {
+
+      if (user.blockExpiresAt && user.blockExpiresAt < Date.now()) {
+        user.isBlocked = false;
+        user.blockExpiresAt = null;
+        await user.save();
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: "Your account is temporarily blocked. Try again later."
+        });
+      }
+    }
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({
