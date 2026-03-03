@@ -12,6 +12,7 @@ exports.getallusers = async (req, res) => {
     } catch (error) {
         console.log(error);
         res.status(500).json({
+            success:false,
             message: error.message,
         });
     }
@@ -28,6 +29,14 @@ exports.blockUser = async (req, res) => {
                 message: "Cannot block admin"
             });
         }
+
+        if (user.isBlocked === true) {
+            return res.status(400).json({
+                success: false,
+                message: "User is already blocked"
+            });
+        }
+
         user.isBlocked = true;
         await user.save();
         res.status(200).json({
@@ -44,13 +53,24 @@ exports.unblockUser = async (req, res) => {
     try {
         const user = await Usermodel.findById(req.params.id);
         if (!user) {
-            return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({
+                success:false,
+                message: "User not found" });
         }
         if (user.role === "admin") {
             return res.status(400).json({
+                success:false,
                 message: "Cannot unblock admin (not applicable)"
             });
         }
+
+          if (user.isBlocked === false) {
+            return res.status(400).json({
+                success: false,
+                message: "User is already unblocked"
+            });
+        }
+
         user.isBlocked = false;
         await user.save();
         res.status(200).json({
@@ -60,6 +80,8 @@ exports.unblockUser = async (req, res) => {
 
     } catch (error) {
         console.log(error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({
+            success:false,
+            message: error.message });
     }
 }
