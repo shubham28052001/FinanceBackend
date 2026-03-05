@@ -1,12 +1,21 @@
 const Usermodel = require("../models/user");
 const crypto = require("crypto");
 const sendEmail = require("../nodemailer/sendMail");
+const { validationResult } = require("express-validator");
 
 exports.register = async (req, res) => {
   try {
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        errors: errors.array()
+      });
+    }
+
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
-      return res.status(400).json({success:false, message: "All fields are required" });
+      return res.status(400).json({ success: false, message: "All fields are required" });
     }
     if (password.length < 6) {
       return res
@@ -71,6 +80,14 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        errors: errors.array()
+      });
+    }
+
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({
@@ -192,7 +209,7 @@ exports.resendVerificationEmail = async (req, res) => {
 
     await user.save();
 
-    
+
     await sendEmail(
       email,
       "Resend Email Verification",
@@ -213,22 +230,27 @@ exports.resendVerificationEmail = async (req, res) => {
 };
 
 exports.forgotPassword = async (req, res) => {
-  try{
-    const {email} = req.body;
-    const user = await Usermodel.findOne({email});
-    if(!user){
+  try {
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        errors: errors.array()
+      });
+    }
+    const { email } = req.body;
+
+    const user = await Usermodel.findOne({ email });
+
+    if (!user) {
       return res.status(404).json({
         message: "User not found"
       });
     }
-    const resetToken = crypto.randomBytes(32).toString("hex");
-     const hashedToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
-    user.resetPasswordToken = hashedToken;
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
-    await user.save();
+
+    const resetToken = user.generateResetPasswordToken();
+
+    await user.save({ validateBeforeSave: false });
 
     const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
 
@@ -237,84 +259,121 @@ exports.forgotPassword = async (req, res) => {
       "Password Reset Request",
       `<h2>Password Reset</h2>
        <p>Click below to reset your password</p>
-       <a href="${resetLink}">Reset Password</a>`,
+       <a href="${resetLink}">Reset Password</a>`
     );
+
     res.json({
       success: true,
-      message: "Password reset email sent", 
+      resetToken,
+      message: "Password reset email sent",
     });
-  }catch(error){
+
+  } catch (error) {
+
     console.log(error);
+
     res.status(500).json({
       message: error.message,
     });
+
   }
 }
 
-exports.resetPassword = async (req,res) =>{
-  try{
-    const {password} = req.body;
+exports.resetPassword = async (req, res) => {
+  try {
+    const { password } = req.body;
 
-    if(!password || password.length < 6){
+    if (!password || password.length < 6) {
       return res.status(400).json({
         message: "Password must be at least 6 characters"
       });
     }
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(req.params.token)
+      .digest("hex");
+
     const user = await Usermodel.findOne({
-      resetPasswordToken: crypto.createHash("sha256").update(req.params.token).digest("hex"),
+      resetPasswordToken: hashedToken,
       resetPasswordExpire: { $gt: Date.now() }
     });
 
-  if(!user){
-    return res.status(400).json({
-      message: "Invalid or expired token"
-    });
-  }
-  user.password = await Usermodel.hashPassword(req.body.password);
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpire = undefined;
-  await user.save();
-  res.json({
-    success: true,
-    message: "Password reset successful"
-  });
-}catch(error){
-  console.log(error);
-  res.status(500).json({
-    message: error.message
-  });
-}
-};
-
-exports.changedPassword = async (req, res) => {
-  try{
-    const {oldpassword, newpassword} = req.body;
-
-    if(!oldpassword || !newpassword){
+    if (!user) {
       return res.status(400).json({
-        message: "Old password and new password are required"
-      });
-
-    }
-
-    const user = await Usermodel.findById(req.user._id).select("+password");
-    const isMatch = await user.matchPassword(oldpassword);
-
-    if(!isMatch){
-      return res.status(401).json({
-        message: "Old password is incorrect"
+        message: "Invalid or expired token"
       });
     }
-    user.password = await Usermodel.hashPassword(newpassword);
+    user.password = await Usermodel.hashPassword(password);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
     await user.save();
     res.json({
       success: true,
-      message: "Password changed successfully"
+      message: "Password reset successful"
     });
-  }catch(error){
+  } catch (error) {
     console.log(error);
     res.status(500).json({
       message: error.message
     });
   }
-}
+};
+
+exports.changedPassword = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        errors: errors.array()
+      });
+    }
+    const { oldpassword, newpassword } = req.body;
+
+    if (!oldpassword || !newpassword) {
+      return res.status(400).json({
+        message: "Old password and new password are required"
+      });
+    }
+
+    if (newpassword.length < 6) {
+      return res.status(400).json({
+        message: "New password must be at least 6 characters"
+      });
+    }
+
+    const user = await Usermodel.findById(req.user._id).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found"
+      });
+    }
+
+    const isMatch = await user.matchPassword(oldpassword);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        message: "Old password is incorrect"
+      });
+    }
+
+    user.password = await Usermodel.hashPassword(newpassword);
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Password changed successfully"
+    });
+
+  } catch (error) {
+
+    console.log(error);
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+};
