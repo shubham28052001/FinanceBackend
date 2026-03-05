@@ -22,4 +22,18 @@ authController.login);
 router.get("/verify-email",authController.verifyEmail);
 router.post("/resend-verification", authController.resendVerificationEmail);
 
+router.put("/reset-password/:token",[
+    body("password").isLength({ min: 6 }).withMessage("Password too short")
+], authController.resetPassword
+);
+router.post("/forgot-password",[
+    body("email").isEmail().withMessage("Invalid email")
+], authController.forgotPassword
+);
+router.put("/change-password",[
+    body("oldpassword").notEmpty().withMessage("Old password is required"),
+    body("newpassword").isLength({ min: 6 }).withMessage("New password too short")
+], authController.changedPassword
+);
+
 module.exports = router;

@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken")
-
+const cypto = require("crypto")
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -50,7 +50,9 @@ const userSchema = new mongoose.Schema(
     isBlocked: {
       type: Boolean,
       default: false
-    }
+    },
+    resetPasswordToken: String,
+    resetPasswordExpire: Date
   },
   { timestamps: true }
 );
@@ -71,6 +73,20 @@ userSchema.methods.generateAccessToken = function () {
 userSchema.methods.generateRefreshToken = function () {
   return jwt.sign({ id: this._id }, process.env.JWT_REFRESH_KEY, { expiresIn: "7d" })
 }
+// Reset password
 
+userSchema.methods.generateResetToken = function () {
+  const resetToken = crypto.randomBytes(32).toString("hex");
+
+  this.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  //  Expiry time (10 minutes)
+  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+
+  return resetToken; 
+};
 
 module.exports = mongoose.model("User", userSchema);
