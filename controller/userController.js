@@ -192,8 +192,7 @@ exports.resendVerificationEmail = async (req, res) => {
 
     await user.save();
 
-    const verifyLink = `${process.env.CLIENT_URL}/api/users/verify-email?token=${verificationToken}`;
-
+    
     await sendEmail(
       email,
       "Resend Email Verification",
