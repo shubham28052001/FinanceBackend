@@ -15,7 +15,9 @@ exports.createBudget = async (req, res) => {
 
         const existingBudget = await budgetmodel.findOne({
             user: req.user.id,
-            category,
+            category: {
+                $regex: new RegExp("^" + category + "$", "i")
+            },
             type
         });
         if (existingBudget) {
@@ -30,7 +32,9 @@ exports.createBudget = async (req, res) => {
                 $match: {
                     user: new mongoose.Types.ObjectId(req.user.id),
                     type: "expense",
-                    category: category
+                    category: {
+                        $regex: new RegExp("^" + category + "$", "i")
+                    }
                 }
             },
             {
@@ -58,7 +62,7 @@ exports.createBudget = async (req, res) => {
 
         const budget = await budgetmodel.create({
             user: req.user.id,
-            category,
+            category: category.toLowerCase(),
             limit,
             type
         });
@@ -68,7 +72,7 @@ exports.createBudget = async (req, res) => {
             message: "Budget created succesfully",
             budget,
             spent,
-            usage: Math.round(usage), 
+            usage: Math.round(usage),
             status
         });
 
@@ -77,5 +81,58 @@ exports.createBudget = async (req, res) => {
             success: false,
             message: error.message
         })
+    }
+}
+
+exports.getAllBudgets = async (req, res) => {
+    try {
+        const budgets = await budgetmodel.find({
+            user: req.user.id
+        }).sort({ createdAt: -1 });
+
+        res.json({
+            success: true,
+            message: "Budget Fetched succesfully",
+            budgets
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+
+}
+
+exports.deleteBudget = async (req, res) => {
+    try {
+
+        const budget = await budgetmodel.findOne({
+            _id: req.params.id,
+            user: req.user.id
+        });
+
+        if (!budget) {
+            return res.status(404).json({
+                success: false,
+                message: "Budget not found"
+            });
+        }
+
+        await budgetmodel.deleteOne({
+            _id: req.params.id
+        });
+
+        res.json({
+            success: true,
+            message: "Budget deleted successfully"
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 }
