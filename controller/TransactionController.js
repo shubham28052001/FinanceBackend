@@ -1,66 +1,67 @@
 const transactionModel = require("../models/transactionmodel")
 const { validationResult } = require("express-validator");
-const mongoose=require("mongoose")
+const mongoose = require("mongoose")
+
 exports.addTransaction = async (req, res) => {
-    try {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                errors: errors.array()
-            });
-        }
-
-        const { type, amount, category, description, date } = req.body;
-
-        if (type === "expense") {
-            const income = await transactionModel.aggregate([
-                {
-                    $match: { user: new mongoose.Types.ObjectId(req.user.id), type: "income" }
-                },
-                {
-                    $group: { _id: null, total: { $sum: "$amount" } }
-                }
-            ]);
-            const expense = await transactionModel.aggregate([
-                {
-                    $match: { user: new mongoose.Types.ObjectId(req.user.id), type: "expense" }
-                },
-                {
-                    $group: { _id: null, total: { $sum: "$amount" } }
-                }
-            ]);
-            const totalIncome = income[0]?.total || 0;
-            const totalExpense = expense[0]?.total || 0;
-            const balance = totalIncome - totalExpense;
-            if (amount > balance) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Insufficient balance"
-                });
-            }
-        }
-
-        const transaction = await transactionModel.create({
-            user: req.user.id,
-            type,
-            amount,
-            category,
-            description,
-            date
-        });
-        res.status(201).json({
-            success: true,
-            transaction,
-            message: "Transaction added successfully"
-        });
-
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        errors: errors.array()
+      });
     }
+
+    const { type, amount, category, description, date } = req.body;
+
+    if (type === "expense") {
+      const income = await transactionModel.aggregate([
+        {
+          $match: { user: new mongoose.Types.ObjectId(req.user.id), type: "income" }
+        },
+        {
+          $group: { _id: null, total: { $sum: "$amount" } }
+        }
+      ]);
+      const expense = await transactionModel.aggregate([
+        {
+          $match: { user: new mongoose.Types.ObjectId(req.user.id), type: "expense" }
+        },
+        {
+          $group: { _id: null, total: { $sum: "$amount" } }
+        }
+      ]);
+      const totalIncome = income[0]?.total || 0;
+      const totalExpense = expense[0]?.total || 0;
+      const balance = totalIncome - totalExpense;
+      if (amount > balance) {
+        return res.status(400).json({
+          success: false,
+          message: "Insufficient balance"
+        });
+      }
+    }
+
+    const transaction = await transactionModel.create({
+      user: req.user.id,
+      type,
+      amount,
+      category,
+      description,
+      date
+    });
+    res.status(201).json({
+      success: true,
+      transaction,
+      message: "Transaction added successfully"
+    });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
 }
 
 exports.getDashboard = async (req, res) => {
@@ -115,3 +116,24 @@ exports.getDashboard = async (req, res) => {
     });
   }
 };
+
+
+exports.getAllTransactions = async (req, res) => {
+  try {
+    const transactions = await transactionModel
+      .find({ user: req.user.id })
+      .sort({ createdAt: -1 }); // Latest first
+
+    res.json({
+      success: true,
+      message: "Transaction Fetched Successfully",
+      transactions
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}

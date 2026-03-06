@@ -14,5 +14,7 @@ router.post("/add-transaction", middleware.protect, [
 
 ],TransactionController.addTransaction);
 
+router.get("/transaction",middleware.protect,TransactionController.getAllTransactions);
 router.get("/dashboard", middleware.protect, TransactionController.getDashboard);
+
 module.exports=router;
