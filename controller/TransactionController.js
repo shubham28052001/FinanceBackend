@@ -33,10 +33,10 @@ exports.addTransaction = async (req, res) => {
       const totalIncome = income[0]?.total || 0;
       const totalExpense = expense[0]?.total || 0;
       const balance = totalIncome - totalExpense;
-      if (amount > balance) {
+      if (type === "expense" && amount > balance) {
         return res.status(400).json({
           success: false,
-          message: "Insufficient balance"
+          message: "⚠ Low balance warning"
         });
       }
     }
@@ -116,7 +116,6 @@ exports.getDashboard = async (req, res) => {
     });
   }
 };
-
 
 exports.getAllTransactions = async (req, res) => {
   try {
