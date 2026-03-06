@@ -20,6 +20,7 @@ router.post("/login",[
 authController.login);
 
 router.get("/verify-email",authController.verifyEmail);
+
 router.post("/resend-verification", authController.resendVerificationEmail);
 
 router.post("/forgot-password",[
