@@ -136,3 +136,34 @@ exports.getAllTransactions = async (req, res) => {
     });
   }
 }
+
+exports.deleteTransaction = async (req, res) => {
+  try {
+    const transaction = await transactionModel.findOne({
+      _id: req.params.id,
+      user: req.user.id
+    });
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: "Transaction not found"
+      });
+    }
+
+    await transactionModel.deleteOne({
+      _id: req.params.id
+    });
+
+    res.json({
+      success: true,
+      message: "Transaction deleted successfully"
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}

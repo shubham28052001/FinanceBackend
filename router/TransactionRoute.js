@@ -10,11 +10,13 @@ router.post("/add-transaction", middleware.protect, [
 
     body("category").notEmpty().withMessage("Category is required"),
 
-   body("date").optional().isISO8601().withMessage("Invalid date format")
+    body("date").optional().isISO8601().withMessage("Invalid date format")
 
-],TransactionController.addTransaction);
+], TransactionController.addTransaction);
 
-router.get("/transaction",middleware.protect,TransactionController.getAllTransactions);
+router.get("/transaction", middleware.protect, TransactionController.getAllTransactions);
 router.get("/dashboard", middleware.protect, TransactionController.getDashboard);
 
-module.exports=router;
+router.delete("/transaction/:id",middleware.protect,TransactionController.deleteTransaction);
+
+module.exports = router;
