@@ -41,7 +41,7 @@ exports.register = async (req, res) => {
       password: hashedPassword,
       role: "user",
       emailVerificationToken: hashedToken,
-      emailVerificationExpire: Date.now() + 5 * 60 * 1000,
+      emailVerificationExpire: Date.now() + 60* 1000
     });
 
     const accessToken = user.generateAccessToken();
@@ -49,7 +49,7 @@ exports.register = async (req, res) => {
     user.refreshToken = refreshToken;
     await user.save();
 
-    const verifyLink = `${process.env.CLIENT_URL}/api/users/verify-email?token=${verificationToken}`;
+    const verifyLink = `${process.env.CLIENT_URL}/verify-email?token=${verificationToken}`;
 
     await sendEmail(
       email,
@@ -74,6 +74,110 @@ exports.register = async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+exports.verifyEmail = async (req, res) => {
+  try {
+
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: "Token missing"
+      });
+    }
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    // ⭐ Find user by token + expiry
+    const user = await Usermodel.findOne({
+      emailVerificationToken: hashedToken,
+      emailVerificationExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification link"
+      });
+    }
+
+    // ⭐ Already verified check (Only this user)
+    if (user.isEmailVerified) {
+      return res.json({
+        success: true,
+        message: "Email already verified"
+      });
+    }
+
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Email verified successfully"
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};
+
+exports.resendVerificationEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await Usermodel.findOne({ email });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+    if (user.isEmailVerified) {
+      return res.status(400).json({
+        message: "Email already verified",
+      });
+    }
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(verificationToken)
+      .digest("hex");
+
+    user.emailVerificationToken = hashedToken;
+    user.emailVerificationExpire = Date.now() + 5 * 60 * 1000;
+
+    await user.save();
+
+    const verifyLink =
+      `http://localhost:5173/verify-email?token=${verificationToken}`;
+
+    await sendEmail(
+      email,
+      "Resend Email Verification",
+      `<h2>Verify Your Email</h2>
+           <p>Click below to verify</p>
+           <a href="${verifyLink}">Verify Email</a>`,
+    );
+
+    res.json({
+      success: true,
+      message: "Verification email resent",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
 
@@ -151,82 +255,6 @@ exports.login = async (req, res) => {
   }
 };
 
-exports.verifyEmail = async (req, res) => {
-  try {
-    const { token } = req.query;
-    if (!token) {
-      return res.status(400).json({ message: "Token missing" });
-    }
-
-    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-
-    const user = await Usermodel.findOne({
-      emailVerificationToken: hashedToken,
-      emailVerificationExpire: { $gt: Date.now() },
-    });
-
-    if (!user) {
-      return res.status(400).json({
-        message: "Invalid or expired token",
-      });
-    }
-
-    user.isEmailVerified = true;
-    user.emailVerificationToken = undefined;
-    user.emailVerificationExpire = undefined;
-    await user.save();
-
-    res.json({ success: true, message: "Email verified successfully" });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-exports.resendVerificationEmail = async (req, res) => {
-  try {
-    const { email } = req.body;
-    const user = await Usermodel.findOne({ email });
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
-    }
-    if (user.isEmailVerified) {
-      return res.status(400).json({
-        message: "Email already verified",
-      });
-    }
-    const verificationToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(verificationToken)
-      .digest("hex");
-
-    user.emailVerificationToken = hashedToken;
-    user.emailVerificationExpire = Date.now() + 5 * 60 * 1000;
-
-    await user.save();
-
-
-    await sendEmail(
-      email,
-      "Resend Email Verification",
-      `<h2>Verify Your Email</h2>
-           <p>Click below to verify</p>
-           <a href="${verifyLink}">Verify Email</a>`,
-    );
-
-    res.json({
-      success: true,
-      message: "Verification email resent",
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
-  }
-};
 
 exports.forgotPassword = async (req, res) => {
   try {
