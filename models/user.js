@@ -73,7 +73,7 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
 };
 
 userSchema.methods.generateAccessToken = function () {
-  return jwt.sign({ id: this._id }, process.env.JWT_ACCESS_KEY, { expiresIn: "15m" })
+  return jwt.sign({ id: this._id }, process.env.JWT_ACCESS_KEY, { expiresIn: "2d" })
 }
 
 userSchema.methods.generateRefreshToken = function () {

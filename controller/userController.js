@@ -14,14 +14,6 @@ exports.register = async (req, res) => {
     }
 
     const { name, email, password } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({ success: false, message: "All fields are required" });
-    }
-    if (password.length < 6) {
-      return res
-        .status(400)
-        .json({ message: "Password must be at least 6 characters" });
-    }
     const existingUser = await Usermodel.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -41,13 +33,8 @@ exports.register = async (req, res) => {
       password: hashedPassword,
       role: "user",
       emailVerificationToken: hashedToken,
-      emailVerificationExpire: Date.now() + 60* 1000
+      emailVerificationExpire: Date.now() + 60 * 1000
     });
-
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
-    user.refreshToken = refreshToken;
-    await user.save();
 
     const verifyLink = `${process.env.CLIENT_URL}/verify-email?token=${verificationToken}`;
 
@@ -192,13 +179,7 @@ exports.login = async (req, res) => {
     }
 
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password is required",
-      });
-    }
-    const user = await Usermodel.findOne({ email }).select("+password");
+    const user = await Usermodel.findOne({ email }).select("+password +refreshToken");
 
     if (!user) {
       return res.status(401).json({
@@ -213,18 +194,12 @@ exports.login = async (req, res) => {
       });
     }
     if (user.isBlocked) {
-
-      if (user.blockExpiresAt && user.blockExpiresAt < Date.now()) {
-        user.isBlocked = false;
-        user.blockExpiresAt = null;
-        await user.save();
-      } else {
-        return res.status(403).json({
-          success: false,
-          message: "Your account is temporarily blocked. Try again later."
-        });
-      }
+      return res.status(403).json({
+        success: false,
+        message: "Your account is blocked"
+      });
     }
+
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({
@@ -236,18 +211,20 @@ exports.login = async (req, res) => {
     const refreshToken = user.generateRefreshToken();
 
     user.refreshToken = refreshToken;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
+
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
     res.status(200).json({
       success: true,
       message: "Login Successfully",
       role: user.role,
-      email:user.email,
+      email: user.email,
       accessToken
     });
   } catch (error) {
@@ -401,6 +378,38 @@ exports.changedPassword = async (req, res) => {
 
     res.status(500).json({
       message: error.message
+    });
+
+  }
+};
+
+exports.refreshToken = async (req, res) => {
+  try {
+
+    const refreshToken = req.cookies.refreshToken;
+
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_KEY);
+
+    const user = await Usermodel
+      .findById(decoded.id)
+      .select("+refreshToken");
+
+    if (!user || user.refreshToken !== refreshToken) {
+      return res.status(401).json({
+        message: "Invalid refresh token"
+      });
+    }
+
+    const newAccessToken = user.generateAccessToken();
+
+    res.status(200).json({
+      accessToken: newAccessToken
+    });
+
+  } catch (error) {
+
+    res.status(401).json({
+      message: "Invalid or expired refresh token"
     });
 
   }

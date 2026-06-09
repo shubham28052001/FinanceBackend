@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authController = require("../controller/userController");
 const { body } = require("express-validator")
-const middleware=require("../middleware/middleware")
+const middleware = require("../middleware/middleware")
 
 router.post("/register",
     [
@@ -13,27 +13,29 @@ router.post("/register",
     authController.register);
 
 
-router.post("/login",[
+router.post("/login", [
     body("email").isEmail().withMessage("Invalid Email"),
     body("password").notEmpty().withMessage("Password is required")
 ],
-authController.login);
+    authController.login);
 
-router.get("/verify-email",authController.verifyEmail);
+router.get("/verify-email", authController.verifyEmail);
 
 router.post("/resend-verification", authController.resendVerificationEmail);
 
-router.post("/forgot-password",[
+router.post("/forgot-password", [
     body("email").isEmail().withMessage("Invalid email")
 ], authController.forgotPassword);
 
-router.put("/reset-password/:token",[
+router.put("/reset-password/:token", [
     body("password").isLength({ min: 6 }).withMessage("Password too short")
 ], authController.resetPassword);
 
-router.put("/change-password",middleware.protect,[
+router.put("/change-password", middleware.protect, [
     body("oldpassword").notEmpty().withMessage("Old password is required"),
     body("newpassword").isLength({ min: 6 }).withMessage("New password too short")
 ], authController.changedPassword);
+
+router.post("/refresh-token", authController.refreshToken);
 
 module.exports = router;
