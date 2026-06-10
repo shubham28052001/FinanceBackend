@@ -14,7 +14,7 @@ connectDB();
 
 app.use(cors({
     origin: [
-        "process.env.CLIENT_URL",
+        process.env.CLIENT_URL,
         "finance-frontend-ten-iota.vercel.app"
     ],
     credentials: true
