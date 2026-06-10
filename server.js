@@ -13,7 +13,10 @@ const app = express();
 connectDB();
 
 app.use(cors({
-    origin: process.env.CLIENT_URL,
+    origin: [
+        "process.env.CLIENT_URL",
+        "finance-frontend-ten-iota.vercel.app"
+    ],
     credentials: true
 }));
 app.use(cookieParser());
